@@ -19,6 +19,7 @@ logging.basicConfig( \
 
 mail_jsn= dict()
 sent_jsn= dict()
+traversable_key= set()
 
 def con_red(**kwargs):
     """
@@ -30,7 +31,7 @@ def con_red(**kwargs):
         con_red(red_conf)
     return r
 
-def _hit_in_red():
+def hit_in_red():
     """
     here we will wrrite code to hit both api and mark state as 0 with session id as key for both api.
 
@@ -57,35 +58,35 @@ def _hit_in_red():
             sent_jsn_is = json.dumps(sent_jsn)
             mail_resp = requests.post(url=Mail_classifier_api,data=mail_jsn_is)
             sent_resp = requests.post(url=Cz_sentiment_api,data=sent_jsn_is)
-            _stat_M = mail_resp.json()
-            _stat_S = sent_resp.json()
-            
-            if _stat_M['status'] =="OK":
-                _sessionidM = session_id+"##M"
+            stat_M = mail_resp.json()
+            stat_S = sent_resp.json()
+            traversable_key.add(session_id)
+            if stat_M['status'] =="OK":
+                sessionidM = session_id+"##M"
                 try:
                     if not r.ping():
                         r = con_red(red_conf)
-                    red_respM = r.hmset(session_id,{'M_stat':'0','_sessionidM':''})
-                    log.info(f"Mail Classifier API is returning :- {_stat_M['status']}  for Message ID:-  {messageId}  Redis response is :- {red_respM}")
+                    red_respM = r.hmset(session_id,{'M_stat':'0',sessionidM:''})
+                    log.info(f"Mail Classifier API is returning :- {stat_M['status']}  for Message ID:-  {messageId}  Redis response is :- {red_respM}")
                 except Exception as e:
                     log.error(f"Could not place Mail Classifier on redis because of {e} for Message ID:-  {messageId}")
                     log.exception("Here we are catching new exceptions ======")
 
             else:
-                log.error(f"Mail Classifier API is returning :- {_stat_M['status']}  for Message ID:-  {messageId}")
+                log.error(f"Mail Classifier API is returning :- {stat_M['status']}  for Message ID:-  {messageId}")
             
-            if _stat_S['status'] =="OK":
-                _sessionidS = session_id+"##S"
+            if stat_S['status'] =="OK":
+                sessionidS = session_id+"##S"
                 try:
                     if not r.ping():
                         r = con_red(red_conf)
-                    red_respS = r.hmset(session_id,{'S_stat':'0','_sessionidS':''})
-                    log.info(f"Sentiment API is returning :- {_stat_S['status']}  for Message ID:-  {messageId}  Redis response is :- {red_respM}")
+                    red_respS = r.hmset(session_id,{'S_stat':'0',sessionidS:''})
+                    log.info(f"Sentiment API is returning :- {stat_S['status']}  for Message ID:-  {messageId}  Redis response is :- {red_respS}")
                 except Exception as e:
                     log.error(f"Could not place Sentimnent on redis because of {e}  for Message ID:-  {messageId}")
                     log.exception("Here we are catching new exceptions ======")
             else:
-                log.error(f"Sentiment API is returning :- {_stat_S['status']}  for Message ID:-  {messageId}")
+                log.error(f"Sentiment API is returning :- {stat_S['status']}  for Message ID:-  {messageId}")
         except:
             log.info(f"Input redis packet have problem")
 
@@ -99,13 +100,51 @@ def monitr_in_red():
     after writing delete the both key that maintain state.
 
     """
+    r = con_red(red_conf)
+    while True:
+        if not r.ping():
+                r = con_red(red_conf)
+
+        for acc_key in traversable_key:
+            tmp_hold = r.hgetall(acc_key)
+            if tmp_hold['S_stat'] and tmp_hold['M_stat']:
+                try:
+                    data_to_send = dict()
+                    s_key = acc_key+"##S"
+                    m_key = acc_key+"##M"
+                    log.info("doing psckt prse")
+                    resp_sent = tmp_hold[s_key]
+                    resp_mail = tmp_hold[m_key]
+                    mail_client_val: list = acc_key.split('##')
+                    data_to_send.update({'disposition':{'dispositionVal':resp_mail[1],'dispositionCScore':resp_mail[2]},\
+                                        'subdisposition':{'subdispositionVal':resp_mail[3],'subdispositionCScore':resp_mail[4]},\
+                                        'sentiment':{'sentimentVal':resp_sent[1],'sentimentCScore':resp_sent[2]},\
+                                        'priority':{'priority':None,'priorityCScore':None},\
+                                        'remarks':None,'messageId':mail_client_val[0],'mail_id':resp_mail[6],'client_id':mail_client_val[1]})
+                    dispatch_packet = json.dumps(data_to_send, default=str)
+                    fn_resp = r.lpush('AIANALYSIS', dispatch_packet)
+                    if fn_resp:
+                        log.info(f"We have successfully placed packet in redis for message id :-{mail_client_val[0]}")
+                        log.info(f"So now we are going to delete info from redis for session id :- {acc_key}")
+                        r.del(acc_key)
+                    else:
+                        log.info(f"Could not place Packet in redis  for session id :- {acc_key}")
+                        
+
+                except Exception as e:
+                    log.error(f"Got exception while creating packet for sessionis :-{acc_key}  and exception is :- {e}")
+
+
+            else:
+                log.info("No packet available for parsing")
+
 def main_manager():
     """
     here we will open thread for both function so that they will run continuously.
 
     """
     runing_thr = list()
-    thr_to_run = ['monitr_in_red','_hit_in_red']
+    thr_to_run = [monitr_in_red,hit_in_red]
     while 1:
         try:
 
