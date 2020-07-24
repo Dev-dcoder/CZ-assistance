@@ -4,14 +4,14 @@ import json
 
 @app.route("/webhook", methods=["POST"])
 def webhook() :
-    _response_is = json.dumps(request.json)
-    if _response_is is not "":
+    response_is = json.loads(request.json)
+    if response_is is not "":
         try:
-            session_is = str(_response_is['sessionId'])[:-3]
-            sufix_is = str(_response_is['sessionId'])[-1]
-            _stat_key = sufix_is+"_stat"
-            _val_key = "_sessionid"+sufix_is
-            r.hmset(session_is,{'_stat_key':'1','_val_key':_response_is})
+            session_is = str(response_is['sessionId'])[:-3]
+            sufix_is = str(response_is['sessionId'])[-1]
+            stat_key = sufix_is+"_stat"
+            val_key = session_is+sufix_is
+            r.hmset(session_is,{stat_key:'1',val_key:_response_is})
         except r.ConnectionError:
             log.info(f'redis connection error')
             
