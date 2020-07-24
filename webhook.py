@@ -1,5 +1,6 @@
 import json
 import logging
+import redis
 from setting import red_conf
 from flask import Flask, request, jsonify, make_response
 from mailListener import con_red
@@ -7,7 +8,7 @@ from mailListener import con_red
 log = logging.getLogger(__name__)
 app = Flask(__name__)
 
-r = con_red(red_conf)
+r = con_red()
 
 
 @app.route("/webhook", methods=["POST"])
@@ -20,7 +21,7 @@ def webhook():
             stat_key = sufix_is + "_stat"
             val_key = session_is + sufix_is
             r.hmset(session_is, {stat_key: "1", val_key: response_is})
-        except r.ConnectionError:
+        except redis.ConnectionError:
             log.info(f"redis connection error")
 
     else:
