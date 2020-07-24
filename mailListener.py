@@ -126,7 +126,7 @@ def monitr_in_red():
                     if fn_resp:
                         log.info(f"We have successfully placed packet in redis for message id :-{mail_client_val[0]}")
                         log.info(f"So now we are going to delete info from redis for session id :- {acc_key}")
-                        #r.del(acc_key)
+                        r.del(acc_key)
                     else:
                         log.info(f"Could not place Packet in redis  for session id :- {acc_key}")
                         
