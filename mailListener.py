@@ -21,14 +21,14 @@ mail_jsn= dict()
 sent_jsn= dict()
 traversable_key= set()
 
-def con_red(**kwargs):
+def con_red():
     """
     here we will create connection of redis .
 
     """ 
     r = redis.Redis(host=red_conf['host'],port=red_conf['port'],db=red_conf['db'])
     if not r.ping():
-        con_red(red_conf)
+        con_red()
     return r
 
 def hit_in_red():
@@ -36,12 +36,12 @@ def hit_in_red():
     here we will wrrite code to hit both api and mark state as 0 with session id as key for both api.
 
     """
-    r = con_red(red_conf)
+    r = con_red()
     while 1:
 
         try:
             if not r.ping():
-                r = con_red(red_conf)
+                r = con_red()
             data = r.rpop(r_queue)
             packet = json.loads(data)
             textData = packet['mailBody']
@@ -65,7 +65,7 @@ def hit_in_red():
                 sessionidM = session_id+"##M"
                 try:
                     if not r.ping():
-                        r = con_red(red_conf)
+                        r = con_red()
                     red_respM = r.hmset(session_id,{'M_stat':'0',sessionidM:''})
                     log.info(f"Mail Classifier API is returning :- {stat_M['status']}  for Message ID:-  {messageId}  Redis response is :- {red_respM}")
                 except Exception as e:
@@ -79,7 +79,7 @@ def hit_in_red():
                 sessionidS = session_id+"##S"
                 try:
                     if not r.ping():
-                        r = con_red(red_conf)
+                        r = con_red()
                     red_respS = r.hmset(session_id,{'S_stat':'0',sessionidS:''})
                     log.info(f"Sentiment API is returning :- {stat_S['status']}  for Message ID:-  {messageId}  Redis response is :- {red_respS}")
                 except Exception as e:
@@ -100,10 +100,10 @@ def monitr_in_red():
     after writing delete the both key that maintain state.
 
     """
-    r = con_red(red_conf)
+    r = con_red()
     while True:
         if not r.ping():
-                r = con_red(red_conf)
+                r = con_red()
 
         for acc_key in traversable_key:
             tmp_hold = r.hgetall(acc_key)
@@ -126,7 +126,7 @@ def monitr_in_red():
                     if fn_resp:
                         log.info(f"We have successfully placed packet in redis for message id :-{mail_client_val[0]}")
                         log.info(f"So now we are going to delete info from redis for session id :- {acc_key}")
-                        r.del(acc_key)
+                        #r.del(acc_key)
                     else:
                         log.info(f"Could not place Packet in redis  for session id :- {acc_key}")
                         
