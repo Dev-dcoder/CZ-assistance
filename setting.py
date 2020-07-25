@@ -1,6 +1,6 @@
 import redis
 
-
+ujjwal = "True"
 
 red_conf={
 'host': 'localhost',
